@@ -1,0 +1,53 @@
+# docker-compose.yml
+# ==================
+# Spins up the entire stack with one command:
+#   docker compose up --build
+#
+# Services:
+#   - ollama   : free, open-source local LLM runtime (no API key needed).
+#   - backend  : FastAPI service that performs the code review.
+#   - frontend : React + Monaco Editor UI, served by Nginx.
+#
+# This is what makes the project "free for everyone": no cloud LLM
+# subscription is required to run the full stack end-to-end.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: code-reviewer-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+    # NOTE: after first startup, pull a model once with:
+    #   docker exec -it code-reviewer-ollama ollama pull qwen2.5-coder:7b
+
+  backend:
+    build:
+      context: ./backend
+    container_name: code-reviewer-backend
+    environment:
+      - ENVIRONMENT=production
+      - LLM_PROVIDER=ollama
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=qwen2.5-coder:7b
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:80,http://localhost
+    ports:
+      - "8000:8000"
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: code-reviewer-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  ollama-data:
